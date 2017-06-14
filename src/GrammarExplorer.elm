@@ -1,7 +1,7 @@
 module GrammarExplorer exposing (main)
 
 import Http
-import Html exposing (Html, button, div, input, label, node, programWithFlags, text, textarea)
+import Html exposing (Html, button, div, input, label, programWithFlags, text, textarea)
 import Html.Attributes exposing (style, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as JD
@@ -137,7 +137,7 @@ update msg model =
 
 appStyle =
     [ ( "width", "100%" )
-    , ( "height", "100%" )
+    , ( "height", "100vh" )
     , ( "display", "flex" )
     , ( "flex-basis", "fill" )
     , ( "flex-direction", "column" )
@@ -208,8 +208,7 @@ inputStyle =
 view : Model -> Html Msg
 view model =
     div [ style appStyle ]
-        [ node "style" [] [ text "body { height: 100% }" ]
-        , div [ style loaderStyle ]
+        [ div [ style loaderStyle ]
             [ div []
                 [ label [ style labelStyle ] [ text "Parser service URL" ]
                 , input
