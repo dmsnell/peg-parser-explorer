@@ -139,6 +139,7 @@ appStyle =
     [ ( "width", "100%" )
     , ( "height", "100%" )
     , ( "display", "flex" )
+    , ( "flex-basis", "fill" )
     , ( "flex-direction", "column" )
     ]
 
