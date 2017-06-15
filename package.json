@@ -1,0 +1,25 @@
+{
+  "name": "pegjs-explorer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmsnell/peg-parser-explorer.git"
+  },
+  "author": "Dennis Snell <dennis.snell@automattic.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dmsnell/peg-parser-explorer/issues"
+  },
+  "homepage": "https://github.com/dmsnell/peg-parser-explorer#readme",
+  "dependencies": {
+    "body-parser": "1.17.2",
+    "express": "4.15.3",
+    "pegjs": "0.10.0",
+    "pegjs-backtrace": "0.1.1"
+  }
+}

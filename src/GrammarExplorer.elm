@@ -1,12 +1,16 @@
-module GrammarExplorer exposing (main)
+port module GrammarExplorer exposing (main)
 
 import Http
 import Html exposing (Html, button, div, input, label, programWithFlags, text, textarea)
 import Html.Attributes exposing (style, type_, value)
 import Html.Events exposing (onClick, onInput)
-import Json.Decode as JD
-import Json.Encode as JE
 import Regex as RE
+
+
+port parse : { grammar : String, document : String, shouldTrace : Bool } -> Cmd msg
+
+
+port parsed : (ParseResult -> msg) -> Sub msg
 
 
 type alias Flags =
@@ -18,29 +22,34 @@ type alias Model =
     , grammar : String
     , grammarUrl : String
     , parsed : String
-    , pegjsaas : String
     , trace : String
+    , shouldTrace : Bool
     }
 
 
 type Msg
     = FetchGrammar
     | LoadGrammar (Result Http.Error String)
+    | ToggleTracing
     | UpdateGrammar String
     | UpdateGrammarUrl String
     | UpdateDocument String
-    | UpdateParse (Result Http.Error ParseResult)
-    | UpdatePegJSaaS String
+    | UpdateParse ParseResult
 
 
 main : Platform.Program Flags Model Msg
 main =
     programWithFlags
         { init = init
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         , update = update
         , view = view
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    parsed UpdateParse
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -48,15 +57,15 @@ init flags =
     let
         model =
             { document = ">>>><<>><<<>>"
-            , grammar = "Stack\n  = ops:Op* { return ops.reduce( ( a, b ) => a + b, 0 ) }\n\nOp\n  = \">\" { return 1 }\n  / \"<\" { return -1 }\n"
+            , grammar = initialGrammar
             , grammarUrl = "https://raw.githubusercontent.com/WordPress/gutenberg/master/blocks/api/post.pegjs"
             , parsed = ""
-            , pegjsaas = "https://pegjaas-udqzruqlye.now.sh"
             , trace = ""
+            , shouldTrace = False
             }
     in
         ( model
-        , parse model.pegjsaas model
+        , parse { grammar = model.grammar, document = model.document, shouldTrace = model.shouldTrace }
         )
 
 
@@ -66,40 +75,24 @@ fetchGrammar url =
         |> Http.send LoadGrammar
 
 
-type ParseResult
-    = ParseResult String String
+type alias ParseResult =
+    { parsed : String
+    , trace : String
+    }
 
 
-parseDecoder : JD.Decoder ParseResult
-parseDecoder =
-    JD.map2 ParseResult
-        (JD.field "parsed" JD.string)
-        (JD.field "trace" JD.string
-            |> JD.map (RE.replace RE.All (RE.regex "\\\\n") (\_ -> "\n"))
-            |> JD.map (RE.replace RE.All (RE.regex "^.") (\_ -> ""))
-            |> JD.map (RE.replace RE.All (RE.regex ".$") (\_ -> ""))
-        )
-
-
-encodeBody : { r | document : String, grammar : String } -> JE.Value
-encodeBody { document, grammar } =
-    JE.object
-        [ ( "document", JE.string document )
-        , ( "grammar", JE.string grammar )
-        ]
-
-
-parse : String -> { r | document : String, grammar : String } -> Cmd Msg
-parse url body =
-    Http.post url (Http.jsonBody <| encodeBody body) parseDecoder
-        |> Http.send UpdateParse
+cleanTrace : String -> String
+cleanTrace trace =
+    trace
+        |> RE.replace RE.All (RE.regex "\\\\n") (\_ -> "\n")
+        |> String.slice 1 -1
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
-        parseIt =
-            parse model.pegjsaas
+        parseIt { grammar, document } =
+            parse { grammar = grammar, document = document, shouldTrace = model.shouldTrace }
     in
         case msg of
             FetchGrammar ->
@@ -107,6 +100,9 @@ update msg model =
 
             LoadGrammar (Ok s) ->
                 update (UpdateGrammar s) model
+
+            ToggleTracing ->
+                ( { model | shouldTrace = not model.shouldTrace }, Cmd.none )
 
             UpdateDocument s ->
                 let
@@ -125,11 +121,8 @@ update msg model =
             UpdateGrammarUrl s ->
                 ( { model | grammarUrl = s }, Cmd.none )
 
-            UpdateParse (Ok (ParseResult parsed trace)) ->
-                ( { model | parsed = parsed, trace = trace }, Cmd.none )
-
-            UpdatePegJSaaS s ->
-                ( { model | pegjsaas = s }, Cmd.none )
+            UpdateParse { parsed, trace } ->
+                ( { model | parsed = parsed, trace = cleanTrace trace }, Cmd.none )
 
             _ ->
                 ( model, Cmd.none )
@@ -210,16 +203,6 @@ view model =
     div [ style appStyle ]
         [ div [ style loaderStyle ]
             [ div []
-                [ label [ style labelStyle ] [ text "Parser service URL" ]
-                , input
-                    [ style inputStyle
-                    , type_ "text"
-                    , onInput UpdatePegJSaaS
-                    , value model.pegjsaas
-                    ]
-                    []
-                ]
-            , div []
                 [ label [ style labelStyle ] [ text "Grammar to fetch" ]
                 , input
                     [ style inputStyle
@@ -228,7 +211,18 @@ view model =
                     , value model.grammarUrl
                     ]
                     []
-                , button [ onClick <| FetchGrammar ] [ text "Fetch" ]
+                , button [ onClick FetchGrammar ] [ text "Fetch" ]
+                ]
+            , div []
+                [ label [ style labelStyle ] [ text "Toggle tracing" ]
+                , button [ onClick ToggleTracing ]
+                    [ text <|
+                        if model.shouldTrace then
+                            "Disable"
+                        else
+                            "Enable"
+                    ]
+                , text " (can be very slow for large documents and grammars) "
                 ]
             ]
         , div
@@ -241,3 +235,24 @@ view model =
                 ]
             ]
         ]
+
+
+initialGrammar : String
+initialGrammar =
+    """
+Stack
+  = ops:Op*
+  { return ops.reduce( ( a, b ) => a + b, 0 ) }
+
+Op "Operation"
+  = Push
+  / Pop
+
+Push
+  = ">"
+  { return 1 }
+
+Pop
+  = "<"
+  { return -1 }
+"""
